@@ -4,8 +4,8 @@ import './index.css';
 
 function Square(props){
     return(
-        <button className="square" onClick={props.onClick}>
-          {props.value}
+        <button className="square" onClick={props.onClick}  key={props.key}>
+          {props.value? 'X': 'O'}
         </button>
       );
     }
@@ -18,29 +18,44 @@ function Square(props){
         <Square 
                 value={this.props.squares[i]} 
                 onClick={() => this.props.onClick(i)}
+                key={i}
                 />
         );
     }
+    
+    rowcells(rowstartpos, rowlength){
+      
+      var cells = [];
+      for (var i = 0; i < rowlength; i++) {
+          // note: we add a key prop here to allow react to uniquely identify each
+          // element in this array. see: https://reactjs.org/docs/lists-and-keys.html
+          cells.push(
+            this.renderSquare(rowstartpos*rowlength +i));
+      }
+      return cells;
+    }
+
+    rows( rowlength, nrOfRows){
+      var cells = [];
+      for (var i = 0; i < 10; i++) {
+          // note: we add a key prop here to allow react to uniquely identify each
+          // element in this array. see: https://reactjs.org/docs/lists-and-keys.html
+          cells.push(
+            <div className="board-row" key={i}>
+              {this.rowcells(i,rowlength)}
+            </div>
+          )
+      }
+      return cells;
+    }
   
     render() {
-
+      
       return (
+        
         <div>
-          <div className="board-row">
-            {this.renderSquare(0)}
-            {this.renderSquare(1)}
-            {this.renderSquare(2)}
-          </div>
-          <div className="board-row">
-            {this.renderSquare(3)}
-            {this.renderSquare(4)}
-            {this.renderSquare(5)}
-          </div>
-          <div className="board-row">
-            {this.renderSquare(6)}
-            {this.renderSquare(7)}
-            {this.renderSquare(8)}
-          </div>
+         Size: ({this.props.nrOfRows},{this.props.rowlength})
+          {this.rows(this.props.rowlength, this.props.nrOfRows)}
         </div>
       );
     }
@@ -52,12 +67,14 @@ function Square(props){
         super(props);
         this.state = {
           history: [{
-            squares: Array(9).fill(null),
+            squares: Array(20*10).fill(null),
             movelocation:0,
-          }],
-          
+          }], 
+          rowlength :20,
+          nrOfRows:10,          
           stepNumber: 0,
           xIsNext: true,
+                 
         };
       }
 
@@ -65,16 +82,21 @@ function Square(props){
         const history = this.state.history.slice(0, this.state.stepNumber + 1);
         const current = history[history.length - 1];
         const squares = current.squares.slice();
-        if (calculateWinner(squares) || squares[i]) {
-          return;
-        }
-        squares[i] = this.state.xIsNext ? 'X' : 'O';
+      //  if (calculateWinner(squares) || squares[i]) {
+       //   return;
+       // }
+
+        //
+        squares[i] = !squares[i]
+       var neighboursNrI = GetNeighboursNrI(i,squares, this.state.rowlength, this.state.nrOfRows);
+       console.debug('neigbours of '+i+' : '+ neighboursNrI)
         var ml =  i;
         this.setState({
             history: history.concat([{
                 squares: squares,
                 movelocation: ml,
               }]),
+              
             stepNumber: history.length,
             xIsNext: !this.state.xIsNext,
         });
@@ -85,9 +107,28 @@ function Square(props){
           stepNumber: step,
           xIsNext: (step % 2) === 0,
         });
-      }
+      }   
 
-    render() {
+      nextTurn() {
+        const history = this.state.history.slice(0, this.state.stepNumber + 1);
+        const current = history[history.length - 1];
+        const squares = current.squares.slice();
+        var nbSquares =calculateNeigbours(squares);
+        var liveCells = calculateLiveCells(nbSquares);
+        //set livecells
+        var ml =  42;
+        this.setState({
+            history: history.concat([{
+                squares: liveCells,
+                movelocation: ml,
+              }]),
+            stepNumber: history.length,
+            xIsNext: !this.state.xIsNext,
+        });
+      }
+    
+    
+      render() {
         const history = this.state.history;
         const current = history[this.state.stepNumber];
         const winner = calculateWinner(current.squares);
@@ -95,15 +136,17 @@ function Square(props){
         const moves = history.map((step, move) => {
             const desc = move ?
               'Go to move #' + move +' movloc: (' 
-              + Math.floor(step.movelocation/3 )+ ','+ step.movelocation%3  + ')'  :
+              + Math.floor(step.movelocation/ this.state.nrOfRows )+ ','+ step.movelocation % this.state.rowlength  + ')'  :
               'Go to game start';
             return (
               <li key={move} >
-                <button className={move===this.state.stepNumber?'curmove':''} onClick={() => this.jumpTo(move)}>{desc}</button>
+                <button className={move===this.state.stepNumber?'curmove':''} 
+                        onClick={() => this.jumpTo(move)}>{desc}</button>
               </li>
             );
           });
 
+     
         let status;
         if (winner) {
           status = 'Winner: ' + winner;
@@ -115,11 +158,17 @@ function Square(props){
         <div className="game">
           <div className="game-board">
           <Board
+            rowlength={this.state.rowlength}
+            nrOfRows={this.state.nrOfRows}
             squares={current.squares}
             onClick={(i) => this.handleClick(i)}
           />
           </div>
+
           <div className="game-info">
+          <div>
+            <button onClick={() => this.nextTurn()}>next Turn</button>
+             </div>
             <div>{ status }</div>
             <ol>{moves}</ol>
           </div>
@@ -128,7 +177,26 @@ function Square(props){
     }
   }
 
+  function GetNeighboursNrI(currenti ,squares, rowlength, nrOfRows){
+    var neigPositions = [-1-rowlength, 0-rowlength, 1-rowlength
+      -1, 1,
+    rowlength-1, rowlength, rowlength+1];
+    var nb = 0;
+    for(let i=0 ; i < neigPositions.length ; i++){
+      if(squares[currenti][neigPositions[i]]){
+        nb++;
+      }
+    }
+    return nb;
+  }
 
+  function calculateNeigbours( cellSquares){
+    return cellSquares;
+  }
+
+  function calculateLiveCells( cellSquares){
+    return cellSquares;
+  }
   function calculateWinner(squares) {
     const lines = [
       [0, 1, 2],
